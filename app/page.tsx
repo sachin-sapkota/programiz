@@ -1,113 +1,204 @@
-import Image from 'next/image'
-
+'use client';
+import { useEffect, useState } from 'react';
+import Image from 'next/image';
+import useSWR from 'swr';
+import axios from 'axios';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 export default function Home() {
+  interface JobListing {
+    company: string;
+    company_logo: string;
+    keywords: string[];
+    location: string;
+    position: string;
+    posted_on: number;
+    timing: string;
+  }
+  const router = useRouter();
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  const [filteredData, setFilteredData] = useState<JobListing[]>([]);
+
+  useEffect(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const filterParam = queryParams.get('filterby');
+    if (filterParam) {
+      const filters = filterParam.split(',');
+      setActiveFilters(filters);
+    }
+  }, []);
+
+  useEffect(() => {
+    const queryParams = new URLSearchParams();
+    if (activeFilters.length) {
+      queryParams.set('filterby', activeFilters.join(','));
+      router.replace(`/?${queryParams.toString()}`);
+    } else {
+      router.replace('/');
+    }
+  }, [activeFilters]);
+
+  // fetching data using swr
+  const { data }: any = useSWR(
+    'https://storage.googleapis.com/programiz-static/hiring/software/job-listing-page-challenge/data.json',
+    async (url) => await axios(url)
+  );
+
+  // converting milisec into days
+  const dateConverter = (posted_on: any) => {
+    console.log(posted_on);
+    const targetTimeInMs = posted_on;
+    const currentTime = new Date();
+
+    const timeDiffInMilliseconds = currentTime.getTime() - targetTimeInMs;
+    const timeDiffInDays = Math.floor(
+      timeDiffInMilliseconds / (1000 * 60 * 60 * 24)
+    );
+
+    return timeDiffInDays;
+  };
+
+  // handling addition and deletion of keywords
+  const handleKeywordFilter = (keyword: string) => {
+    if (activeFilters.includes(keyword)) {
+      const updatedFilters = activeFilters.filter(
+        (filter) => filter !== keyword
+      );
+      setActiveFilters(updatedFilters);
+    } else {
+      const updatedFilters = [...activeFilters, keyword];
+      setActiveFilters(updatedFilters);
+    }
+  };
+  const handleClearFilters = () => {
+    setActiveFilters([]);
+  };
+
+  // filter out the data according on change in active filters
+  useEffect(() => {
+    if (data && activeFilters.length > 0) {
+      const filteredJobs = data?.data?.filter((info: JobListing) => {
+        return activeFilters.every((filter) => info.keywords.includes(filter));
+      });
+      setFilteredData(filteredJobs);
+    } else {
+      setFilteredData([]);
+    }
+  }, [data, activeFilters]);
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <main className=" bg-background/60 min-h-screen">
+      <Image
+        className="h-[140px] w-screen object-cover "
+        src={'/images/background.jpg'}
+        width={900}
+        height={900}
+        alt="background"
+      />
+
+      {/* filter section div */}
+      <div className="flex flex-col items-center w-full pt-16 relative">
+        <div
+          className={`${
+            activeFilters.length > 0 ? 'flex' : 'hidden'
+          } px-8 absolute justify-between -top-[40px] bg-white rounded-md inset-x-0 mx-auto w-[80%] py-5`}
+        >
+          <div className="flex gap-2 ">
+            {activeFilters.map((filter, i) => (
+              <div
+                className="flex items-center  rounded-md overflow-hidden group "
+                key={i}
+              >
+                <div className="py-1 px-2 bg-gray-100 text-black/50 group-hover:text-black/60 text-base font-[500]">
+                  {filter}
+                </div>
+                <span
+                  className=" cursor-pointer group-hover:bg-gray-600 bg-gray-400 py-1 px-2.5 text-white"
+                  onClick={() => handleKeywordFilter(filter)}
+                >
+                  &#10005;
+                </span>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={handleClearFilters}
+            className="hover:underline text-gray-500 font-[500] text-sm"
           >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+            Clear
+          </button>
+        </div>
+
+        {/* job listing section */}
+
+        <div className="w-[80%] flex flex-col gap-5  ">
+          {activeFilters.length > 0 && filteredData.length == 0 ? (
+            <div className="flex items-center justify-center">
+              Sorry ! There's not any job with such keyword
+            </div>
+          ) : (
+            (filteredData.length > 0 ? filteredData : data?.data || []).map(
+              (info: JobListing, i: number) => (
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 200,
+                    duration: 0.3,
+                    delay: i * 0.2,
+                  }}
+                  exit={{ opacity: 0 }}
+                  className="justify-between flex bg-white rounded-md  hover:shadow-xl transition-all ease-linear dura  gap-2 py-5 px-8 hover:border-l-[4px] hover:border-blue-400 items-center shadow-md"
+                  key={i}
+                >
+                  <div className="flex  items-center gap-6 ">
+                    <div className="h-[50px] w-[50px] rounded-full overflow-hidden relative ring-[1px] ring-black/20 ">
+                      <Image
+                        className="absolute object-contain object-center w-full h-full scale-125 "
+                        src={info.company_logo}
+                        width={600}
+                        height={600}
+                        alt="logo"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="text-base text-black/50 font-semibold">
+                        {info.company}
+                      </div>
+
+                      <div className="font-bold text-lg hover:text-black/50 cursor-pointer">
+                        {info.position}
+                      </div>
+                      <div className="text-black/50 flex items-center gap-2 text-sm font-[500]">
+                        <div>{info.timing}</div>
+                        <span>·</span>
+                        <div>{dateConverter(info.posted_on)}d ago</div>
+                        <span>·</span>
+                        <div>{info.location}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {info.keywords?.map((key, j) => (
+                      <div
+                        onClick={() => {
+                          if (!activeFilters.includes(key)) {
+                            handleKeywordFilter(key);
+                          }
+                        }}
+                        key={j}
+                        className="cursor-pointer bg-gray-200 py-1 px-2 font-semibold text-sm hover:bg-gray-400 hover:text-white rounded-[0.2rem] text-black/50"
+                      >
+                        {key}
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )
+            )
+          )}
         </div>
       </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800 hover:dark:bg-opacity-30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore the Next.js 13 playground.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
     </main>
-  )
+  );
 }
